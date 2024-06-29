@@ -216,10 +216,10 @@ if __name__ == "__main__":
     if args.debug:
         torch.autograd.set_detect_anomaly(True)
 
-    if args.inference or args.evaluate:
-        args.load_adapter = True
+    trained = not args.inference and not args.evaluate
 
-    is_train = not args.inference and not args.evaluate
+    if not trained:
+        args.load_adapter = True
 
     if args.attn_impl is None:
         if mlora.common._flash_attn_available:
