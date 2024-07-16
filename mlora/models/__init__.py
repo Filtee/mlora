@@ -1,5 +1,5 @@
 from .modeling_chatglm import GLMForCausalLM
-from .modeling_gemma import GemmaForCausalLM
+from .modeling_gemma import GemmaForCausalLM, Gemma2ForCausalLM
 from .modeling_llama import LlamaForCausalLM
 from .modeling_mistral import MistralForCausalLM
 from .modeling_mistral import MistralForCausalLM as Qwen2ForCausalLM
@@ -8,6 +8,7 @@ from .modeling_phi import PhiForCausalLM
 model_dict = {
     "llama": LlamaForCausalLM,
     "gemma": GemmaForCausalLM,
+    "gemma2": Gemma2ForCausalLM,
     "mistral": MistralForCausalLM,
     "qwen2": Qwen2ForCausalLM,
     "phi": PhiForCausalLM,
@@ -27,6 +28,7 @@ def from_pretrained(llm_model, **kwargs):
 __all__ = [
     "LlamaForCausalLM",
     "GemmaForCausalLM",
+    "Gemma2ForCausalLM",
     "MistralForCausalLM",
     "Qwen2ForCausalLM",
     "PhiForCausalLM",

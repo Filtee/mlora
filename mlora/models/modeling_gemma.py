@@ -104,6 +104,52 @@ class GemmaForCausalLM(LlamaForCausalLM):
         return seq_module
 
     @staticmethod
+    def set_decoder_layer(
+        index: int,
+        layer: modeling_gemma.GemmaDecoderLayer,
+        llm_args: LlamaConfig,
+    ):
+        decoder = LlamaDecoderLayer(index)
+        # =============================================
+        #               Self Attention Layer
+        # =============================================
+        decoder.self_attn_ = GEMMA_ATTENTION_CLASSES[llm_args.attn_implementation_](
+            layer.self_attn.q_proj,
+            layer.self_attn.k_proj,
+            layer.self_attn.v_proj,
+            layer.self_attn.o_proj,
+            llm_args,
+        )
+
+        # =============================================
+        #                   MLP Layer
+        # =============================================
+        decoder.mlp_ = FeedForward(
+            LlamaMLP(
+                layer.mlp.gate_proj,
+                layer.mlp.down_proj,
+                layer.mlp.up_proj,
+                llm_args,
+            )
+        )
+
+        # =============================================
+        #               Input Layer Norm
+        # =============================================
+        decoder.input_layernorm_ = GemmaRMSNorm(
+            layer.input_layernorm.weight, llm_args.rms_norm_eps_
+        )
+
+        # =============================================
+        #           Post Attention Layer Norm
+        # =============================================
+        decoder.post_attention_layernorm_ = GemmaRMSNorm(
+            layer.post_attention_layernorm.weight, llm_args.rms_norm_eps_
+        )
+
+        return decoder
+
+    @staticmethod
     def from_pretrained(
         llm_model: modeling_gemma.GemmaForCausalLM,
         attn_impl: str = "eager",
@@ -135,37 +181,57 @@ class GemmaForCausalLM(LlamaForCausalLM):
 
         model = GemmaForCausalLM(llm_args)
         llm_model.requires_grad_(False)
+
+        # =============================================
+        #               Embedding Layer
+        # =============================================
         model.embed_tokens_ = GemmaEmbedding(
             llm_model.model.embed_tokens.weight,
             llm_args.pad_token_id_,
-            llm_args.dim_**0.5,
+            llm_args.dim_ ** 0.5,
         )
+
+        # =============================================
+        #                   Decoder Layers
+        # =============================================
+        for idx, layer in enumerate(llm_model.model.layers):
+            model.layers_.append(
+                GemmaForCausalLM.set_decoder_layer(idx, layer, llm_args)
+            )
+
+        # =============================================
+        #                   Norm Layer
+        # =============================================
         model.norm_ = GemmaRMSNorm(llm_model.model.norm.weight, llm_args.rms_norm_eps_)
         copy_parameters(llm_model.lm_head, model.lm_head_)
 
-        for idx, layer in enumerate(llm_model.model.layers):
-            decoder = LlamaDecoderLayer(idx)
-            decoder.self_attn_ = GEMMA_ATTENTION_CLASSES[llm_args.attn_implementation_](
-                layer.self_attn.q_proj,
-                layer.self_attn.k_proj,
-                layer.self_attn.v_proj,
-                layer.self_attn.o_proj,
-                llm_args,
-            )
-            decoder.mlp_ = FeedForward(
-                LlamaMLP(
-                    layer.mlp.gate_proj,
-                    layer.mlp.down_proj,
-                    layer.mlp.up_proj,
-                    llm_args,
-                )
-            )
-            decoder.input_layernorm_ = GemmaRMSNorm(
-                layer.input_layernorm.weight, llm_args.rms_norm_eps_
-            )
-            decoder.post_attention_layernorm_ = GemmaRMSNorm(
-                layer.post_attention_layernorm.weight, llm_args.rms_norm_eps_
-            )
-            model.layers_.append(decoder)
-
         return model
+
+
+class Gemma2ForCausalLM(GemmaForCausalLM):
+    def __init__(self, config: LlamaConfig) -> None:
+        super().__init__(config)
+
+    @staticmethod
+    def set_decoder_layer(
+        index: int,
+        layer: modeling_gemma.GemmaDecoderLayer,
+        llm_args: LlamaConfig,
+    ):
+        decoder = super().set_decoder_layer(index, layer, llm_args)
+
+        # =============================================
+        #           Pre Feedforward Layer Norm
+        # =============================================
+        decoder.pre_feedforward_layernorm_ = GemmaRMSNorm(
+            layer.pre_feedforward_layernorm.weight, llm_args.rms_norm_eps_
+        )
+
+        # =============================================
+        #           Post Feedforward Layer Norm
+        # =============================================
+        decoder.post_feedforward_layernorm_ = GemmaRMSNorm(
+            layer.post_feedforward_layernorm.weight, llm_args.rms_norm_eps_
+        )
+
+        return decoder
